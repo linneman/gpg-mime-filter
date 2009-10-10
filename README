@@ -1,0 +1,35 @@
+Ruby script framework for the encryption and decryption of email
+according the GPG/MIME Format (RFC 3156).
+
+The packages includes the following files:
+
+gpgmime.rb:         Mime / GPGMime classes for encryption, decryption, clear
+                    sign and check
+
+gpgmime				bash script for command line invocation of gpgmime.rb
+
+plist_parser.rb:	Parser for property list files configuration file
+
+gpg_smtp_server.rb:	Simple SMTP filter server for the encryption respectively
+                    signature of outgoing messages. In case all recipients in
+                    to:, cc: and bcc: are in the public keyring, the message
+                    is encrypted and signed using the default private key. Other
+                    wise a clear text signature is generated.
+
+gpg_smtp_decrypt.rb: Decryption or clear signature check front-end. Requires the
+                    specification of RFC3156 compliant input and output message
+                    files.
+
+gpg_check_passphrase.rb: Helper function for checking the GPG passphrase for 
+                    correctess
+
+GPGServer.applescript: Apple Script file for graphical front-end to
+                     gpg_smtp_server.rb
+
+GPGDecode:           Apple Script droplet for the invocation of gpg_smtp_decrypt.rb
+
+running.icns:        Icon file for state dialog window in GPGServer.applescript           
+
+
+This work is protected due to the GNU General Public License
+September 2009, Author: Otto Linnemann
