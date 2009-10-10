@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>External SMTP</key>
+	<dict>
+		<key>Server</key>
+		<string>your smtp mail server name</string>
+		<key>Port</key>
+		<integer>25</integer>
+		<key>Account</key>
+		<string>your account name e.g. email address</string>
+		<key>Passphrase</key>
+		<string>your smtp passphrase if required</string>
+		<key>FromAddress</key>
+		<string>used for from field of your outgoing mail</string>
+	</dict>
+	<key>Local SMTP</key>
+	<dict>
+		<key>Port</key>
+		<integer>2000</integer>
+	</dict>
+</dict>
+</plist>

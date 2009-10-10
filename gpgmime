@@ -1,0 +1,66 @@
+#! /usr/bin/env ruby
+
+require 'gpgmime.rb'
+
+def help
+	infostr = <<INFO
+gpgmime - GnuPG encryption and decryption for MIME messages
+
+This application is used for encryption and decryption of
+GPG/Mime encoded email. It receives the complete MIME
+message consisted out of mail header and MIME formated
+content from standard input and writes the encoded respectively
+decoded result to standard output.
+
+Invocation: gpgmime [option] [passphrase]
+
+options:
+
+decode:             decrypts GPG encoded input stream respectively 
+                    checks GPG clear text signature. This is the 
+                    default option. Passphrase is required as 2nd
+                    argument.
+
+encrypt:            encrypts input stream to GPG/Mime message format.
+                    Uses all recipients declared in Mime header for
+                    encryption. Pay attention that BCC recipients
+                    are not included within Mime-header.
+
+encrypt_and_sign:   same as encrypt but the message is signed in
+                    addition. Requires passphrase as 2nd argument.
+
+clear_sign:         generates a clear text signature in GPG/Mime
+                    message format. Requires passphrase as 2nd
+                    argument.
+
+(C) 2009/09, GNU-General-Public-Licence, Author: Otto Linnemann
+INFO
+
+		puts infostr
+end
+
+
+if ARGV.length < 1 || ARGV.length > 2
+    help
+else
+    mimeParser = GpgMime.new
+	option = ""
+	passphrase = ""
+
+	if ARGV.length == 2
+		option 		= ARGV[0]
+		passphrase 	= ARGV[1]
+	else
+		option = "decode"
+		passphrase 	= ARGV[0]
+	end	
+
+    if mimeParser.respond_to? :"#{option}"
+		mimeParser.read_next_message( $stdin )
+        mimeParser.send( :"#{option}", passphrase )
+		puts mimeParser.getMessage
+    else
+        $stderr.puts "method #{option} undefined error!"
+    end
+end
+__END__
