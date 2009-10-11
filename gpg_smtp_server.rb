@@ -13,7 +13,8 @@ message is encrypted. Otherwise a separate signature is generated
 
 =end
 
-require 'net/smtp'
+require 'smtp_tls'
+# require 'net/smtp'
 require 'socket'
 require 'stringio'
 
@@ -33,6 +34,7 @@ class SmtpServer
     ext_account, 
     ext_passphrase, 
     from_address, 
+    authtype,
     local_port, 
     gpg_passphrase, 
     logfilename = File.join( ENV["HOME"], "/Library/Logs/GpgServer.log" )
@@ -43,12 +45,13 @@ class SmtpServer
     @account              = ext_account
     @from_address         = from_address
     @smtp_passphrase      = ext_passphrase
+    @authtype             = authtype
     @gpg_passphrase       = gpg_passphrase
     @local_port           = local_port
     @log                  = File.new( logfilename, "w" )
   end
   
-  attr_accessor :gpg_passphrase, :smtp_passphrase, :from_address, :account, :helo, :mailServerPort, :mailServerName, :local_port
+  attr_accessor :gpg_passphrase, :smtp_passphrase, :authtype, :from_address, :account, :helo, :mailServerPort, :mailServerName, :local_port
   
   
   private
@@ -65,7 +68,7 @@ class SmtpServer
   def sendmail( rcpArray, message )
     # File.open("mimeparser_out.eml", "w") { |stream| stream.write( message ) }
 
-    Net::SMTP.start( @mailServerName, @mailServerPort, @helo, @account, @smtp_passphrase ) do |smtp|
+    Net::SMTP.start( @mailServerName, @mailServerPort, @helo, @account, @smtp_passphrase, @authtype ) do |smtp|
     	smtp.send_message( message, @from_address, rcpArray )
     end
   end
@@ -323,6 +326,7 @@ myServer = SmtpServer.new(
   extSmtp["Account"],
   extSmtp["Passphrase"],
   extSmtp["FromAddress"],
+  extSmtp["Authentification Type"],
   local["Port"],
   ARGV[0],  # gpg passphrase 
   logfilename = File.join( ENV["HOME"], "/Library/Logs/GpgServer.log" )

@@ -8,6 +8,7 @@
 
 require 'digest/sha1'
 require 'open3'
+require 'tempfile'
 
 class MimeParser
     
@@ -341,6 +342,7 @@ class GpgMime < MimeParser
   # when writing larger amounts of data to process pipes
   def gpg( recipient_array, inputstr, optionstr, passphrase=nil )
     
+    gpg_result_code = 0
     outputstr = ""
     messagestr = ""
 
@@ -348,15 +350,21 @@ class GpgMime < MimeParser
     recipient_str = ""
     recipient_array.each { |address| recipient_str << "-r "+address+" " }        
   
+    # gpg result code needs to be written to a file
+    # since popen3 does not support its transmission
+    resultCodeFile = Tempfile.new("gpg_result_code")
+    resultCodeFileName = resultCodeFile.path
+    resultCodeFile.close
+  
     # open pipe for passphrase
     pp_read, pp_write = IO.pipe 
     if passphrase != nil
       pp_write.puts( passphrase )
-      pp_option = "--passphrase-fd #{pp_read.fileno}"      
+      pp_option = "--passphrase-fd #{pp_read.fileno}; echo $? > #{resultCodeFileName}"      
     else
       pp_option = " "
     end
-    
+        
     command = @gpgCmd + " " + optionstr  + " " + pp_option + " " + recipient_str 
     log "GPG-Command: " + command  
     Open3.popen3(command) do |stdin, stdout, stderr|
@@ -371,13 +379,13 @@ class GpgMime < MimeParser
 
     pp_write.close
     pp_read.close
-
-    # result code currently not supported by popen3
-    gpg_result_code = 0
+    File.open(resultCodeFileName,"r") {  |f| gpg_result_code = f.read }
+    File.unlink( resultCodeFileName )
     
     # result array
-    [outputstr, messagestr, gpg_result_code]
+    [outputstr, messagestr, gpg_result_code.to_i]
   end
+  
   
   
   
@@ -390,7 +398,7 @@ class GpgMime < MimeParser
       gpg( [], "to_sign", "--batch -o - -abs", passphrase )
     
     # process signature
-    if( gpgmsg.length == 0 )
+    if( gpg_result_code == 0 )
       true
     else
       false
@@ -423,7 +431,7 @@ class GpgMime < MimeParser
       gpg( recipient_array, to_encrypt, optionstr, passphrase )
         
     # handle encrypted result
-    if( gpgmsg.length == 0 )
+    if( gpg_result_code == 0 )
       # Success, store encryption result to class internals 
       
       @content_str = 
@@ -449,7 +457,11 @@ class GpgMime < MimeParser
     end
     
     # deliver gpg error code to invoker if any
-    gpgmsg
+    if gpg_result_code != 0
+      gpgmsg
+    else
+      ""
+    end
     
   end
   
@@ -506,7 +518,7 @@ class GpgMime < MimeParser
       gpg( [], to_sign, "--batch -o - -abs", passphrase )
     
     # process signature
-    if( gpgmsg.length == 0 )
+    if( gpg_result_code == 0 )
       # Success, store encryption result to class internals 
       
       @content_str = 
@@ -527,8 +539,12 @@ class GpgMime < MimeParser
         "--#{boundary}--"  + LINESEP + LINESEP
     end
     
-    # deliver error messages
-    gpgmsg
+    # deliver gpg error code to invoker if any
+    if gpg_result_code != 0
+      gpgmsg
+    else
+      ""
+    end
   
   end
   
@@ -588,8 +604,13 @@ class GpgMime < MimeParser
     @content_str = decrypted_content + LINESEP
     add_signature( gpgmsg )
     
-    # no decryption error occured so we deliver an empty string
-    ""  
+    # deliver gpg error code to invoker if any
+    if gpg_result_code != 0
+      gpgmsg
+    else
+      ""
+    end
+    
   end
   
   
@@ -655,8 +676,13 @@ class GpgMime < MimeParser
     @content_str = content   
     add_signature( gpgmsg )
 
-    # no decryption error occured so we deliver an empty string
-    ""  
+    # deliver gpg error code to invoker if any
+    if gpg_result_code != 0
+      gpgmsg
+    else
+      ""
+    end
+    
   end
   
   public
@@ -683,7 +709,7 @@ class GpgMime < MimeParser
   def getPubKeyAddressList
     outputstr, messagestr, gpg_result_code = gpg( [], [], "--batch -k " )
     
-    if messagestr.length == 0
+    if gpg_result_code == 0
     
       list = []
     
