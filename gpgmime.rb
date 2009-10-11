@@ -360,12 +360,12 @@ class GpgMime < MimeParser
     pp_read, pp_write = IO.pipe 
     if passphrase != nil
       pp_write.puts( passphrase )
-      pp_option = "--passphrase-fd #{pp_read.fileno}; echo $? > #{resultCodeFileName}"      
+      pp_option = "--passphrase-fd #{pp_read.fileno}"      
     else
       pp_option = " "
     end
         
-    command = @gpgCmd + " " + optionstr  + " " + pp_option + " " + recipient_str 
+    command = @gpgCmd + " " + optionstr  + " " + pp_option + " " + recipient_str + "; echo $? > #{resultCodeFileName}"
     log "GPG-Command: " + command  
     Open3.popen3(command) do |stdin, stdout, stderr|
       Thread.new {
