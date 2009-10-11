@@ -8,6 +8,7 @@
 
 require 'digest/sha1'
 require 'open3'
+require 'tempfile'
 
 class MimeParser
     
@@ -343,10 +344,16 @@ class GpgMime < MimeParser
     
     outputstr = ""
     messagestr = ""
-
+    gpg_result_code = -1
+    
     # generate message options for gpg
     recipient_str = ""
     recipient_array.each { |address| recipient_str << "-r "+address+" " }        
+  
+    # gpg stderr file
+    stderrfile = Tempfile.new("gpg_error.log")
+    stderrfilename = stderrfile.path
+    stderrfile.close
   
     # open pipe for passphrase
     pp_read, pp_write = IO.pipe 
@@ -357,23 +364,42 @@ class GpgMime < MimeParser
       pp_option = " "
     end
     
+    
     command = @gpgCmd + " " + optionstr  + " " + pp_option + " " + recipient_str 
     log "GPG-Command: " + command  
+=begin
+    # popen3 does unfortunatly not deliver the process result code
     Open3.popen3(command) do |stdin, stdout, stderr|
       Thread.new {
         stdin.write( inputstr )
         stdin.close_write
       }
+=end
+            
+    IO.popen(command + " 2> #{stderrfilename}", 'r+') do |pipe|  
+      Thread.new {          
+        pipe.write( inputstr )
+        pipe.close_write
+      }        
+            
+      gpg_result_code = $?      
+      outputstr  = pipe.read
+      messagestr = ""
+      File.open( stderrfilename, "r" ) { |s| messagestr = s.read }
       
-      outputstr = stdout.read
-      messagestr = stderr.read
+      test = IO.new(pp_read.fileno,"r")
+      puts test.gets
+      
+      
+      # puts gpg_result_code.to_s
+      puts command + " 2> #{stderrfilename}"
+      puts stderrfilename + ": "+messagestr
+      exit
+      
     end
 
     pp_write.close
     pp_read.close
-
-    # result code currently not supported by popen3
-    gpg_result_code = 0
     
     # result array
     [outputstr, messagestr, gpg_result_code]
@@ -390,7 +416,7 @@ class GpgMime < MimeParser
       gpg( [], "to_sign", "--batch -o - -abs", passphrase )
     
     # process signature
-    if( gpgmsg.length == 0 )
+    if( gpg_result_code == 0 )
       true
     else
       false
@@ -423,7 +449,7 @@ class GpgMime < MimeParser
       gpg( recipient_array, to_encrypt, optionstr, passphrase )
         
     # handle encrypted result
-    if( gpgmsg.length == 0 )
+    if( gpg_result_code == 0 )
       # Success, store encryption result to class internals 
       
       @content_str = 
@@ -449,7 +475,11 @@ class GpgMime < MimeParser
     end
     
     # deliver gpg error code to invoker if any
-    gpgmsg
+    if gpg_result_code != 0
+      gpgmsg
+    else
+      ""
+    end
     
   end
   
@@ -506,7 +536,7 @@ class GpgMime < MimeParser
       gpg( [], to_sign, "--batch -o - -abs", passphrase )
     
     # process signature
-    if( gpgmsg.length == 0 )
+    if( gpg_result_code == 0 )
       # Success, store encryption result to class internals 
       
       @content_str = 
@@ -527,8 +557,12 @@ class GpgMime < MimeParser
         "--#{boundary}--"  + LINESEP + LINESEP
     end
     
-    # deliver error messages
-    gpgmsg
+    # deliver gpg error code to invoker if any
+    if gpg_result_code != 0
+      gpgmsg
+    else
+      ""
+    end
   
   end
   
@@ -588,8 +622,13 @@ class GpgMime < MimeParser
     @content_str = decrypted_content + LINESEP
     add_signature( gpgmsg )
     
-    # no decryption error occured so we deliver an empty string
-    ""  
+    # deliver gpg error code to invoker if any
+    if gpg_result_code != 0
+      gpgmsg
+    else
+      ""
+    end
+    
   end
   
   
@@ -655,8 +694,13 @@ class GpgMime < MimeParser
     @content_str = content   
     add_signature( gpgmsg )
 
-    # no decryption error occured so we deliver an empty string
-    ""  
+    # deliver gpg error code to invoker if any
+    if gpg_result_code != 0
+      gpgmsg
+    else
+      ""
+    end
+    
   end
   
   public
@@ -683,7 +727,7 @@ class GpgMime < MimeParser
   def getPubKeyAddressList
     outputstr, messagestr, gpg_result_code = gpg( [], [], "--batch -k " )
     
-    if messagestr.length == 0
+    if gpg_result_code == 0
     
       list = []
     
