@@ -3,14 +3,45 @@
 <html>
 <head>
 <title>GPG/MIME Email Filter Scripts</title>
+<link rel="stylesheet" type="text/css" href="gpgmime.css">
 </head>
-<body>
-<left>
-<h1> <image src="keys.jpg" width="200"> GPG/MIME Email Filter Scripts</h1>
-</left>
-<hr/>
 
-<h2>Binaries of the Current Version</h2>
+<body>
+<div id="header">
+<image src="keys.png" width="180"  style="vertical-align:text-bottom; float:right; margin-right:20px;">
+<h1>GPG/MIME Email Filter Scripts</h1>
+<h2>for Apple Mail 4.0 as temporary replacement for GPGMail</h2>
+
+</div>
+
+<div class="colmask fullpage">
+	<div class="col1">
+		<!-- Column 1 start -->
+
+<h2>Why GPG-Mime SMTP Filter Server ?</h2>
+
+<p>With the introduction of Mac OS X Snow Leopard ( 10.6.0) the plugin <a href="http://www.sente.ch/software/GPGMail/English.lproj/GPGMail.html">GPGMail</a> unfortunately does not work anymore. Since this great and easy to use software makes heavy use of non-supported, Apple internal API's of the Mail application, the effort for customizing this software to Snow Leopard is estimated with at least 40 hours. Furthermore the author of the GPGMail plugin does currently not have the time to do this.</p>
+
+<p>Currently other developers struggle to make GPGMail available but this seems to be a highly complex task. Refer also to <a href="http://github.com/rca/GPGMail"> GPGMail-Project-Page</a> for lastest news.</p>
+
+<p>The GPG-MIME Filter Server follows another concept. It does not make use of any unofficial API's. The disadvantage is that it is currently not as easy to use and does not as seamlessly integrate into Apples GUI. But nevertheless as long as the more Mac like GPGMail plugin is not available it can be seen as a functional alternative at least.</p>
+
+<h2>Requirements</h2>
+Before installing the scripts make sure that the following components are available on your machine:
+<ul>
+  <li>Mac OS X Snow Leopard ( 10.6.0 or higher )</li>
+  <li>GnuPG, use <a href="http://macgpg.sourceforge.net ">MacGPG</a> or the <a href="http://www.macports.org">Mac Ports version</a></li>
+  <li>Property List Editor (Provided with this software or the Developer CD which comes with every Mac)</li>
+</ul>
+
+<h2>How does it work ?</h2>
+<p>Like most email client software Apple's Mail application allows to export email messages within original MIME format. GPG/MIME is an expansion to this format which encrypts the email content as a whole and stores the result within an email attachment. Even though Mail.app does not recognise this format, it does not alter it so the encryption can be done by external utility.</p>
+
+<p> The decryption of a GPG/MIME encoded email requires to extract this attachment, decrypt it and replace the message content blog with the decrypted clear text. Reformatting and the invocation of the GPG command line application is implemented with a set of Ruby scripts which are encapsulated within an AppleScript application for simplified usage. Currently users still need to drag and drop the messages they want to decrypt onto the GPG Decode application manually. Later on even this process can be automated by further scripts in example by passing all new messages to the decryption droplet when received.</p>
+
+<p>The encryption process is actually more complex since the mail application alters the MIME format before the message is send out. As a consequence GPG/MIME encrypted messages cannot be handled inside Apple Mail without significantly changing its internal data flow. Instead the present approach creates a local SMTP filter server instance. Thus it is required to change the Apple Mail configuration for using the local SMTP filter server who is responsible for all formatting and encryption processes and forwarding of the result to the external email service provider. Encryption is only possible for recipients whose public GPG keys are available in the local key ring. Otherwise the message is signed exclusively.</p>
+
+<h2>Downloads</h2>
 <p>Click <a href="GPG-Mime.dmg" type="application/image">here to download </a> the current stable version of the software.</p>
 
 
@@ -20,11 +51,16 @@
 <p>This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.</p>
 
 <p>You should have received a copy of the GNU General Public License along with this program.  If not, see <a href="http://www.gnu.org/licenses">here</a>.</p>
+	<!-- Column 1 end -->
+</div>
 
-<h2>Author:</h2> Otto Linnemann
+<div id="footer">
+<p> <b>Author: Otto Linnemann</b> </p>
+<p>October 2009, Frankfurt am Main, Germany</p>
+</div>
 
-<hr/>
-<p>September 2009, Frankfurt am Main, Germany</p>
+
+
 </body>
 </html>
 
