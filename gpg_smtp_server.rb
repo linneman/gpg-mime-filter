@@ -244,7 +244,7 @@ class SmtpServer
 
                 if gpginfo.length == 0
                   sendmail( rcpArray, encrypted_msg )  
-                  client.write "250 Ok" + LINESEP
+                  client.write "250 OK" + LINESEP
                   log "mail sent, 250 OK signaled, last line received: " + line
                 else
                   log "encryption error occured!"

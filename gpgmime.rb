@@ -81,10 +81,10 @@ private
   # get the range for the complete key-value pair, required to remove key
   def getKeyStringRange( key, string, sepchar )
     keystring = key+sepchar
-    if string.match(/^#{keystring}/) == nil
+    if string.match(/^#{keystring}/i) == nil
       return
     end
-    start_index = string.index(/^#{keystring}/)
+    start_index = string.index(/^#{keystring}/i)
     cont_str = string[start_index, string.length - start_index] 
     line_length = cont_str.index(/\r\n[-a-zA-Z0-9_"]/) + 2 # CRLF has to be removed too
     [start_index, line_length]
@@ -97,7 +97,7 @@ private
 
     keystring = key+sepchar
     
-    start_index = string.index(/^#{keystring}/) 
+    start_index = string.index(/^#{keystring}/i) 
     if( start_index != nil )
       
       start_index += keystring.length
@@ -157,7 +157,7 @@ public
   # main key with getValueforKey value first 
   def getValueForSubKey( key, string )
     keystring = key+"="    
-    /(#{keystring})(.+)(;|#{LINESEP})/m =~ ( string+";" )
+    /(#{keystring})(.+)(;|#{LINESEP})/mi =~ ( string+";" )
     if Regexp.last_match(2) != nil 
       Regexp.last_match(2).chomp
     else
@@ -169,7 +169,7 @@ public
   # assigns a value to a given sub key, similar to getValueForSubKey
   def setValueForSubKey( key, value, string )
     keystring = key+"="
-     /(#{keystring})(.+)(;|#{LINESEP})/m =~ ( string+";" )
+     /(#{keystring})(.+)(;|#{LINESEP})/mi =~ ( string+";" )
     offset = Regexp.last_match.offset(2) 
     value_range = [offset[0], offset[1]-offset[0]]
     
@@ -284,7 +284,7 @@ class GpgMime < MimeParser
   # application where we do have only two attachemts which can be distinguished 
   # in this way
   def getSubContentOfType( type, boundary )
-    if( ( /(Content-Type:)(.*?)(#{type})/ =~ @content_str ) == nil )
+    if( ( /(Content-Type:)(.*?)(#{type})/i =~ @content_str ) == nil )    
       return nil 
     end
     
@@ -292,8 +292,20 @@ class GpgMime < MimeParser
     att_end = att_beg + @content_str[ att_beg, @content_str.length - att_beg ].match( boundary ).offset(0)[0]
         
     att_str = @content_str[ att_beg, att_end - att_beg]
-        
-    cont_beg_index = att_str.match(LINESEP+LINESEP).offset(0)[1]
+    
+    att_str.match(LINESEP+LINESEP)
+    if Regexp.last_match != nil
+      cont_beg_index = Regexp.last_match.offset(0)[1]
+    else
+      # some GPG/MIME engines unfortunately encrypt obviously with CR instead of CRLF 
+      att_str.match("\n\n")
+      if Regexp.last_match != nil
+        cont_beg_index = Regexp.last_match.offset(0)[1]
+      else
+        cont_beg_index = 0
+      end
+    end
+    
     att_str[ cont_beg_index, att_str.length - cont_beg_index]
   end
  
@@ -559,15 +571,16 @@ class GpgMime < MimeParser
     
     # check mime type and get boundary 
     cntType = getContentType()
+
     if cntType.match("application\/pgp-encrypted") == nil
       return "input stream with wrong content-type, must be pgp-encrypted!"
     end
     boundary = getValueForSubKey( "boundary", cntType )
     /(")(.*?)(")/=~boundary
-    boundary = "--"+Regexp.last_match(2)
+    boundary = "--"+Regexp.last_match(2)    
     
     # check PGP/Mime Version ( normally this is in the first attachment )
-    version_str = getSubContentOfType( "application\/pgp-encrypted", boundary )    
+    version_str = getSubContentOfType( "application\/pgp-encrypted", boundary )            
     if version_str==nil || version_str.match("Version: 1") == nil
       return "only version 1 for application/pgp-encrypted mime type supported!"
     end    
@@ -602,13 +615,17 @@ class GpgMime < MimeParser
         
     # exchange content and attach gpg signature info at the end of the message 
     @content_str = decrypted_content + LINESEP
-    add_signature( gpgmsg )
-    
+
     # deliver gpg error code to invoker if any
     if gpg_result_code != 0
       gpgmsg
     else
-      ""
+      if  getContentType().match( "application\/pgp-signature" )
+        check_clearsig    
+      else
+        add_signature( gpgmsg )
+        ""
+      end
     end
     
   end
@@ -616,6 +633,7 @@ class GpgMime < MimeParser
   
   # checks clear text signature
   def check_clearsig
+    
     # check mime type and get boundary 
     cntType = getContentType()
     if cntType.match("application\/pgp-signature") == nil
@@ -626,19 +644,20 @@ class GpgMime < MimeParser
     boundary = "--"+Regexp.last_match(2)
                     
     # extract signed content which must be the first section
-    if @content_str.match( boundary+LINESEP ) == nil      
+    # some email clients unfortunately use CR instead of CRLF before encrpytion 
+    if @content_str.match( boundary+LINESEP ) == nil && @content_str.match( boundary+"\n" ) == nil  
       return "input stream does not provide specified boundaries!"
     end
     
     signed_content = @content_str[Regexp.last_match.offset(0)[1], @content_str.length]
         
-    if signed_content.match( LINESEP+boundary ) == nil
+    if signed_content.match( LINESEP+boundary ) == nil && signed_content.match( "\n"+boundary ) == nil
       return "input stream does not provide specified boundaries!"
     end
     
     signed_content = $`
     
-    # extract key
+    # extract key    
     sig_str = getSubContentOfType( "application\/pgp-signature", boundary )  
     if( sig_str == nil )
       return "missing section application/pgp-signature in input stream!" 
@@ -652,8 +671,7 @@ class GpgMime < MimeParser
     # invoke gpg subprocess
     dummy, gpgmsg, gpg_result_code = 
       gpg( [], signed_content, "--batch --verify #{sigfilename} -", nil )
-        
-        
+            
     # RFC 822 requires originally CRLF, but some mua handle it different
     # split encrypted content in original header and content information
     splitmatch = signed_content.match( LINESEP+LINESEP )
@@ -685,6 +703,8 @@ class GpgMime < MimeParser
     
   end
   
+  
+  
   public
   
   # invokes depending of content type decrypt or check_clearsig
@@ -704,6 +724,7 @@ class GpgMime < MimeParser
     return res
     
   end
+  
   
   # delivers an array with all email addresses to public keys
   def getPubKeyAddressList
