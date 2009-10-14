@@ -39,6 +39,7 @@ INFO
 		puts infostr
 end
 
+result_code = 0
 
 if ARGV.length < 1 || ARGV.length > 2
     help
@@ -57,10 +58,17 @@ else
 
     if mimeParser.respond_to? :"#{option}"
 		mimeParser.read_next_message( $stdin )
-        mimeParser.send( :"#{option}", passphrase )
-		puts mimeParser.getMessage
+       gpg_error_msg = mimeParser.send( :"#{option}", passphrase ) 
+		if gpg_error_msg.length == 0
+			puts mimeParser.getMessage
+		else
+			STDERR.puts gpg_error_msg
+			result_code = -1
+		end
     else
         $stderr.puts "method #{option} undefined error!"
     end
 end
+
+exit result_code
 __END__

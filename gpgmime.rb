@@ -9,6 +9,7 @@
 require 'digest/sha1'
 require 'open3'
 require 'tempfile'
+require "base64"
 
 class MimeParser
     
@@ -137,6 +138,10 @@ public
   
   # assigns a value to a given key
   def setValueForKey( key, value, string = @header_str )
+    if value.strip.length == 0
+      return
+    end
+      
     value_range = getKeyValueRange( key, string, ":" )
     if value_range != nil
       string[ *value_range ] = " "+value
@@ -168,6 +173,10 @@ public
   
   # assigns a value to a given sub key, similar to getValueForSubKey
   def setValueForSubKey( key, value, string )
+    if value.strip.length == 0
+      return
+    end
+    
     keystring = key+"="
      /(#{keystring})(.+)(;|#{LINESEP})/mi =~ ( string+";" )
     offset = Regexp.last_match.offset(2) 
@@ -251,6 +260,116 @@ public
   end
   
   
+  # returns the boundary string
+  def getBoundary()
+    cntType = getContentType()
+    boundary = getValueForSubKey( "boundary", cntType )
+    
+    if boundary == nil || boundary == ""
+      return nil # no boundaries
+    else
+       "--"+boundary.gsub("\"","").strip
+    end
+    
+  end
+  
+
+  # returns all array with ranges for all sections
+  # or main content section if no boundaries are defined
+  def getSectionRangeArray()
+    # get boundary 
+    boundary = getBoundary()
+    if boundary == nil
+      return [ (0..getContent.length) ] # no boundaries, return main section
+    end
+        
+    next_start_idx = 0
+    range_array = [ (next_start_idx..next_start_idx) ]
+    
+    content = getContent
+    while /^#{boundary}(\r\n|\n|--)/ =~ content[next_start_idx..content.length]
+      next_start_idx  = next_start_idx + Regexp.last_match.offset(1)[1] 
+      length          = Regexp.last_match.offset(0)[0]
+      
+      range_array[-1] = (range_array[-1].min ... range_array[-1].min + length)
+      range_array << (next_start_idx .. next_start_idx)
+    end
+    
+    range_array[1...-1]
+  end
+
+
+  # adds a footer text to each section
+  def add_footer_to_each_section( footer_text)
+
+    footer_html_text = footer_text.
+      gsub("ä", "&auml;" ).
+      gsub("ö", "&ouml;" ).
+      gsub("ü", "&uuml;" ).
+      gsub("Ä", "&Auml;").
+      gsub("Ö", "&Ouml;").
+      gsub("Ü", "&Uuml;").
+      gsub("ß", "&szlig;" ).
+      gsub("\n", "<br>\n")
+
+    footer_7bit_text = footer_text.
+      gsub("ä", "ae" ).
+      gsub("ö", "oe" ).
+      gsub("ü", "ue" ).
+      gsub("Ä", "Ae").
+      gsub("Ö", "OE").
+      gsub("Ü", "UE").
+      gsub("ß", "ss" )
+
+    newContent = ""
+    boundary = getBoundary() 
+    boundary = "" if !boundary
+    
+    rangeArray = getSectionRangeArray    
+    rangeArray.each do |secrange|
+
+      # for each MIME section extract header and content
+      section     =  @content_str[secrange]
+      /^\r\n|\n$/ =~ section
+      header      = section[ 0 .. Regexp.last_match.begin(0) - $~.length ]
+      content     = section[ Regexp.last_match.offset(0)[1]..section.length ]
+      isBase64    = getValueForKey( "Content-Transfer-Encoding", header ).match(/base64/i)
+      is7Bit      = getValueForKey( "Content-Transfer-Encoding", header ).match(/7bit/i)
+      isUTF8      = getValueForKey( "Content-Type", header ).match(/utf-8/i)
+      isTextHtml  = getValueForKey( "Content-Type", header ).match(/text\/html/i)
+      isTextPlain = getValueForKey( "Content-Type", header ).match(/text\/plain/i)
+
+      # decode content if it is base64
+      content = Base64.decode64(content) if isBase64
+
+      # add footer message
+      if isTextHtml
+        # add footer for html
+        if( content.match(/<\/body>/) )
+          content.sub!("</body>", "<hr/>" + footer_html_text + "<hr/></body>")  
+        else
+          content << "<hr/>" + footer_html_text + "<hr/>\r\n"
+        end
+        
+      else isTextPlain
+        # add footer for plain text
+        content << "\r\n" + 
+        "________________________________________________________________________________\n" + 
+        ( if !isUTF8 then footer_7bit_text else footer_text end ) + "\r\n"
+      end
+
+      # encode to bas64 again if it was encoded
+      content = Base64.encode64(content) if isBase64
+
+      # and add section to new composed message
+      newContent << boundary + "\r\n" + header + "\r\n" + content
+
+    end # rangeArray.each do
+
+    newContent << boundary + "--\r\n" if rangeArray.length > 1 
+    @content_str = newContent
+  end
+    
 end
 
 
@@ -313,39 +432,7 @@ class GpgMime < MimeParser
   # adds signature information of string to the bottom of 
   # a MIME message
   def add_signature( string )
-    is_html = false
-       
-    # check mime type and get boundary 
-    cntType = getContentType()
-    if cntType == nil
-      return "no content type error!"
-    end
-
-    # depending on format we patch html or insert plain text     
-    if cntType.downcase.match("multipart/alternative") or cntType.downcase.match("text/html")
-        string.gsub!("ä", "&auml;" )
-        string.gsub!("ö", "&ouml;" )
-        string.gsub!("ü", "&uuml;" )
-        string.gsub!("Ä", "&Auml;")
-        string.gsub!("Ö", "&Ouml;")
-        string.gsub!("Ü", "&Uuml;")
-        string.gsub!("ß", "&szlig;" )
-        
-        @content_str.sub!("</body>", "<hr/>" + string.gsub("\n", "<br>\n") + "<hr/></body>")        
-    else
-        string.gsub!("ä", "ae" )
-        string.gsub!("ö", "oe" )
-        string.gsub!("ü", "ue" )
-        string.gsub!("Ä", "Ae")
-        string.gsub!("Ö", "Oe")
-        string.gsub!("Ü", "Ue")
-        string.gsub!("ß", "ss" )
-        
-        @content_str << LINESEP + 
-        "________________________________________________________________________________\n" +
-        string   
-    end
-
+    add_footer_to_each_section( string )
   end
   
   
@@ -441,7 +528,7 @@ class GpgMime < MimeParser
     optionstr += "s" if passphrase != nil
     encrypted, gpgmsg, gpg_result_code = 
       gpg( recipient_array, to_encrypt, optionstr, passphrase )
-        
+    
     # handle encrypted result
     if( gpg_result_code == 0 )
       # Success, store encryption result to class internals 
@@ -480,8 +567,8 @@ class GpgMime < MimeParser
   
   # encrypts class internals or delivers error message in case of errors
   # if passphrase is provided, the message is signed with the default key  
-  def encrypt
-    encrypt_and_sign( nil )
+  def encrypt( passphrase = nil, recipient_array = nil )
+    encrypt_and_sign( nil, recipient_array )
   end
   
   
@@ -687,8 +774,7 @@ class GpgMime < MimeParser
             
     # assign original encoding to header
     setContentType( getValueForKey( "Content-Type", header ) )
-    orig_encoding = getValueForKey( "Content-Transfer-Encoding", header )
-    setContentTransferEncoding( orig_encoding ) if orig_encoding.length > 0
+    setContentTransferEncoding( getValueForKey( "Content-Transfer-Encoding", header ) )
     
     # exchange content and attach gpg signature info at the end of the message 
     @content_str = content   
