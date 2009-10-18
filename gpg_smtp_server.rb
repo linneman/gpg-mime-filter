@@ -274,7 +274,7 @@ class SmtpServer
   # starts smtp server
   def run
 
-    server = TCPServer.open( 2000 )
+    server = TCPServer.open( @local_port )
     log "Server is up, waiting for clients ..."
     
     loop {
