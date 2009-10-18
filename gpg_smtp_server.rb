@@ -17,6 +17,7 @@ require 'smtp_tls'
 # require 'net/smtp'
 require 'socket'
 require 'stringio'
+require 'set'
 
 require 'plist_parser'
 require 'gpgmime'
@@ -86,10 +87,12 @@ class SmtpServer
     input_stream = StringIO.open( content_string )
     mimeParser.read_next_message( input_stream )
     pubKeysArray = mimeParser.getPubKeyAddressList
+
+    rcpSet      = rcpArray.map { |s| s.downcase }.to_set
+    pubKeysSet  = pubKeysArray.map { |s| s.downcase }.to_set
+    interSec = rcpSet & pubKeysSet
     
-    interSec = rcpArray & pubKeysArray
-    
-    if interSec.length < rcpArray.length
+    if interSec.length < rcpSet.length
       log "not all in key list"
       gpgmsg = mimeParser.clearsign( @gpg_passphrase ) 
     else
