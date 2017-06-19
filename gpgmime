@@ -1,5 +1,6 @@
 #! /usr/bin/env ruby
 
+$LOAD_PATH.unshift(File.dirname(__FILE__))
 require 'gpgmime.rb'
 
 def help
@@ -16,8 +17,8 @@ Invocation: gpgmime [option] [passphrase]
 
 options:
 
-decode:             decrypts GPG encoded input stream respectively 
-                    checks GPG clear text signature. This is the 
+decode:             decrypts GPG encoded input stream respectively
+                    checks GPG clear text signature. This is the
                     default option. Passphrase is required as 2nd
                     argument.
 
@@ -54,11 +55,11 @@ else
 	else
 		option = "decode"
 		passphrase 	= ARGV[0]
-	end	
+	end
 
     if mimeParser.respond_to? :"#{option}"
 		mimeParser.read_next_message( $stdin )
-       gpg_error_msg = mimeParser.send( :"#{option}", passphrase ) 
+       gpg_error_msg = mimeParser.send( :"#{option}", passphrase )
 		if gpg_error_msg.length == 0
 			puts mimeParser.getMessage
 		else
